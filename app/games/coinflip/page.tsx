@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Coins, ArrowLeft } from 'lucide-react';
+import { Trophy, Coins, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useTokenBalance } from '@/hooks/useToken';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
@@ -11,6 +11,7 @@ import { TOKEN_CONTRACT_ADDRESS, TOKEN_ABI } from '@/contracts/tokenABI';
 import { toast } from 'sonner';
 import PurchaseLivesModal from '@/components/games/PurchaseLivesModal';
 import { usePendingRewards } from '@/contexts/PendingRewardsContext';
+import { useRewardTokens } from '@/hooks/useToken';
 import Link from 'next/link';
 
 const PRICE_PER_FLIP = 3; // 3 LTK per flip
@@ -19,7 +20,8 @@ const WIN_MULTIPLIER = 2; // 2x payout on win
 export default function CoinFlipPage() {
   const { address, isConnected } = useAccount();
   const { balance, refetch: refetchBalance } = useTokenBalance();
-  const { addReward, pendingRewards } = usePendingRewards();
+  const { addReward, pendingRewards, resetRewards } = usePendingRewards();
+  const { reward, isPending: isClaimPending, isSuccess: isClaimSuccess } = useRewardTokens();
   
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [remainingFlips, setRemainingFlips] = useState(0);
@@ -41,6 +43,18 @@ export default function CoinFlipPage() {
       setShowPurchaseModal(false);
     }
   }, [isPaymentSuccess, hash]);
+
+  useEffect(() => {
+    if (isClaimSuccess) {
+      resetRewards();
+      refetchBalance();
+    }
+  }, [isClaimSuccess, resetRewards, refetchBalance]);
+
+  const handleClaimRewards = async () => {
+    if (!address || pendingRewards <= 0) return;
+    await reward(address, pendingRewards);
+  };
 
   const handlePurchaseLives = async (lives: number, totalCost: number) => {
     if (!address) {
@@ -160,6 +174,49 @@ export default function CoinFlipPage() {
             </div>
           </div>
         </div>
+
+        {/* Pending Rewards Display */}
+        {pendingRewards > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 rounded-lg p-6"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="w-6 h-6 text-green-400" />
+                  <span className="text-white font-bold text-xl">Pending Rewards</span>
+                </div>
+                <div className="text-3xl font-bold text-green-400">{pendingRewards} LTK</div>
+              </div>
+              <Button
+                onClick={handleClaimRewards}
+                disabled={isClaimPending}
+                size="lg"
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold px-8 py-6"
+              >
+                {isClaimPending ? (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      className="mr-2"
+                    >
+                      <Coins className="w-5 h-5" />
+                    </motion.div>
+                    Claiming...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    Claim {pendingRewards} LTK
+                  </>
+                )}
+              </Button>
+            </div>
+          </motion.div>
+        )}
 
         <div className="bg-black/50 border border-purple-500/30 rounded-2xl p-12 mb-8">
           <div className="flex flex-col items-center justify-center">
